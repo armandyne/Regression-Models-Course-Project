@@ -1,0 +1,28 @@
+---
+title: "Motor Trend Magazine Report"
+author: "Arman Iskaliyev"
+date: "10/03/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Synopsis
+
+##Questions of interest
+
+1. Is an automatic or manual transmission better for MPG
+
+2. Quantify the MPG difference between automatic and manual transmissions
+
+##Data Processing
+
+##Exploratory Data Analysis
+
+##Model Selection
+
+##Executive Summary
+
+##Appendices
