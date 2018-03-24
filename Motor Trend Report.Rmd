@@ -1,28 +1,148 @@
 ---
-title: "Motor Trend Magazine Report"
+title: "Motor Trend Analysis Report"
 author: "Arman Iskaliyev"
 date: "10/03/2018"
-output: pdf_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(GGally)
+library(datasets)
+set.seed(198712)
 ```
 
-##Synopsis
+##1. Executive Summary
+This report was developed for the Motor Trend Magazine to examine which type of automobile transmission has better result in mileage (miles per gallon or mpg). The report provides an analysis and answers for exploring questions. Methods of analysis include fitting regression models by using stepwise regression method, using T-test for hypothesis test. All R calculations and exploratory plots used in this report can be found in the appendices part. Results of analysis show that manual transmission type is better for mileage than automatic transmission type, and difference between automatic and manual transmissions is 1.8 MPG.
 
-##Questions of interest
+##2. Questions of interest
 
-1. Is an automatic or manual transmission better for MPG
+- **Is an automatic or manual transmission better for MPG**
 
-2. Quantify the MPG difference between automatic and manual transmissions
+- **Quantify the MPG difference between automatic and manual transmissions**
 
-##Data Processing
+##3. Data Processing
+###3.1 Dataset description
+The `mtcars` dataset from base R was used for this analysis. The data in dataset was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
 
-##Exploratory Data Analysis
+Variable  | Desc
+----------|--------------------------
+mpg	     |Miles/(US) gallon
+cyl	     |Number of cylinders
+disp	     |Displacement (cu.in.)
+hp	     |Gross horsepower
+drat	     |Rear axle ratio
+wt	     |Weight (1000 lbs)
+qsec	     |1/4 mile time
+vs	     |V/S
+am	     |Transmission (0 = automatic, 1 = manual)
+gear	     |Number of forward gears
+carb	     |Number of carburetors
 
-##Model Selection
+###3.2 Loading and exploring dataset
+```{r loaddata}
+data("mtcars")
+str(mtcars)
+summary(mtcars)
+```
 
-##Executive Summary
+###3.3 Transformations
+Some variables look like a categorical but they was saved as numeric. We converted them into factors manually.   
+```{r asfact}
+vars_to_fctr <- c("am","cyl","carb","vs","gear")
+#ds[vars_to_fctr] <- lapply(ds[vars_to_fctr], factor)
+ds <- mtcars %>% 
+     tibble::rownames_to_column() %>%
+     mutate_at(vars_to_fctr, funs(factor(.)))
+
+levels(ds$am) <- c("automatic", "manual")
+levels(ds$vs) <- c("V", "S")
+str(ds)
+```
+
+##4. Exploratory Data Analysis
+First we calculated correlation coefficients for our outcome variable, a `mpg`, vs. all other numeric variables. 
+```{r cormatrix}
+ggcorr.out <- ds %>% select_if(is.numeric) %>%
+     ggcorr(label = TRUE)
+```
+
+We found weak correlations in `qsec` and `drat` variables. So these variables will not be needed us in further analysis and they could be excluded from dataset.
+```{r corrview}
+ggcorr.out$data %>% filter(y == "mpg") %>% arrange(abs(coefficient)) %>% select(-label)
+```
+
+We also build boxplot pairs of `mpg` vs. all categorical variables. Here we saw robust relationship between `mpg ~ cyl`, `mpg ~ am` and `mpg ~ vs`, but there are some outliers here, in 8-cylinder observation (Cadillac Fleetwood, Lincoln Continental, Pontiac Firebird) and V type engine observation (Porsche 914-2). We decided to exclude `carb` and `gear` variables.
+```{r outliers}
+var_to_drop <- c("qsec", "drat", "gear", "carb")
+ds %>% filter((vs == "V" & mpg > 25) | ((cyl == "8" & mpg < 12) | (cyl == "8" & mpg > 19)))
+ds <- ds %>% select(-one_of(var_to_drop), -rowname)
+```
+
+##5. Question 1. Is an automatic or manual transmission better for MPG
+As we just have seen in exploratory plot, there is strong relationship between mileage and transmission type, and manual transmission type looks better for MPG. To prove our assumption we conducted two-sided T-test.
+```{r ttest}
+(ttest.out <- t.test(mpg~am, data = ds))
+```
+###Interpretation
+So calculated p-value `r ttest.out$p.value` allow as to reject null hypothesis, and prove that manual transmission is better for MPG.
+
+##6. Question 2. Quantify the MPG difference between automatic and manual transmissions
+###6.1. Fit multiple models and Best model selection
+Here we use stepwise regression method to fit multiple models and choose best model. We started with multivariate model including all variables.
+
+Fit initial model:
+```{r model_init}
+mod.init <- lm(mpg ~ ., data = ds)
+summary(mod.init)
+```
+
+Apply step function with backward direction to exclude variables one at time from formula, and to fit them. At the end of the function it give us best fitted model:  
+```{r model_best}
+mod.best <- step(mod.init, direction = "backward", trace = 0)
+summary(mod.best)
+```
+###Interpretation
+According to the results of the stepwise method the best regression model for mpg includes all these variables:
+
+* cyl
+* hp
+* wt
+* am
+
+This model has a quite high R-squared value equal to `r summary(mod.best)$r.squared`. Our model show that manual transmission type is 1.80 better than automatic.
+
+##7. Conclusion
+* Manual transmission type is better for mileage than automatic
+* Manual transmission type is better for mileage by a factor of 1.8 than automatic
 
 ##Appendices
+### Exploratory plots
+Relationship between mileage and transmission type.
+```{r boxplot}
+qplot(x = am, y = mpg, data = ds, geom = "boxplot")
+```
+
+Correlation of mpg vs. all numerical variables. 
+```{r cormatrixplot}
+ggcorr.out + ggtitle("Correlation matrix")
+```
+
+Matrix of scatterplots mpg vs. all categorical variables.
+```{r cormatrixsctplot}
+ds %>% select_if(is.factor) %>%
+     bind_cols(select(ds, mpg)) %>% 
+     select(mpg, everything()) %>%
+     ggpairs()
+```
+
+Residual plots of best model
+```{r residplot}
+par(mfrow=c(2,2))
+plot(mod.best)
+```
+
